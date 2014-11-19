@@ -48,6 +48,8 @@ Scroll wheel: Fly forward and back
 Right button: Pan view
 
 ------KEYBOARD-------
+
+```
 Move camera:     w = move forwards             r = move up
               a  &  d = move left and right
                  s = move backwards            f = move down
@@ -67,6 +69,7 @@ m,M = Step through variety of color display modes
  .  = Change which axis (Z or Y) is used for color range display
 +,- = Brighten/darken on-screen display
  q  = Quit program
+```
 
 You can try adjusting the gain and the noise parameters to try to fill in some of your missing/black point cloud areas.
 

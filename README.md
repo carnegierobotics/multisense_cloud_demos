@@ -42,12 +42,13 @@ There are also simple motion commands which allow you to fly around the scene.
 
 Common demo commands:
 
--------MOUSE---------
-Left button:  Pitch and yaw view
-Scroll wheel: Fly forward and back
-Right button: Pan view
+**MOUSE**
 
-------KEYBOARD-------
+* Left button:  Pitch and yaw view
+* Scroll wheel: Fly forward and back
+* Right button: Pan view
+
+**KEYBOARD**
 
 ```
 Move camera:     w = move forwards             r = move up

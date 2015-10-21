@@ -745,8 +745,8 @@ void MultiSenseWrapper::InitializeTransforms()
     // One-D matricies are setup with 1 row and N columns
     M1 = Mat(3, 3, CV_32F);
     M2 = Mat(3, 3, CV_32F);
-    D1 = Mat(1, 5, CV_32F);
-    D2 = Mat(1, 5, CV_32F);
+    D1 = Mat(1, 8, CV_32F);
+    D2 = Mat(1, 8, CV_32F);
     R1 = Mat(3, 3, CV_32F);
     R2 = Mat(3, 3, CV_32F);
     P1 = Mat(3, 4, CV_32F);

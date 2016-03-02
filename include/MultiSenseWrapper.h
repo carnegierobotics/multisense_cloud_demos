@@ -35,6 +35,8 @@ public:
     int m_grabbingRows;
     int m_grabbingCols;
 
+    // Is the luma channel supported or does the unit have monochrome imagers?
+    bool m_chromaSupported;
 
 protected:
     // Data members for rectifying images and reprojecting disparities.
@@ -260,6 +262,9 @@ private:
                           crl::multisense::DataSource RequiredSources,
                           int32_t& SelectedWidth, int32_t& SelectedHeight);
 
+    // Make RGB image from Luma image
+     cv::Mat makeMonoImage(const cv::Mat& LumaImage);
+
     // Make RGB image from YCbCr image
      cv::Mat makeRGBImage(const cv::Mat& LumaImage, const cv::Mat& ChromaImage);
 
@@ -288,12 +293,10 @@ private:
 
     // ---- Static callbacks that dispatch to nonstatic update functions ----
 
-    static void chromaLeftCallback(const crl::multisense::image::Header& header,
-                                   void *userDataP);
     static void disparityCallback(const crl::multisense::image::Header& header,
                                   void *userDataP);
-    static void lumaLeftCallback(const crl::multisense::image::Header& header,
-                                 void *userDataP);
+    static void lumaChromaLeftCallback(const crl::multisense::image::Header& header,
+                                       void *userDataP);
 
 
     // ---- Private data members ----

@@ -85,6 +85,7 @@ namespace {
 BaseMultiSenseWrapper::BaseMultiSenseWrapper()
     : m_grabbingRows(0),
       m_grabbingCols(0),
+      m_chromaSupported(true),
       m_leftCalibrationMapX(),
       m_leftCalibrationMapY(),
       m_rightCalibrationMapX(),
@@ -170,6 +171,13 @@ MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
     // Choose an image resolution that is a similar as possible to the
     // requested resolution.
     DataSource RequiredSources = Source_Disparity | Source_Luma_Left | Source_Chroma_Left;
+
+    if (deviceInfo.imagerType == system::DeviceInfo::IMAGER_TYPE_CMV2000_GREY ||
+        deviceInfo.imagerType == system::DeviceInfo::IMAGER_TYPE_CMV4000_GREY) {
+        RequiredSources = Source_Disparity | Source_Luma_Left;
+        m_chromaSupported = false;
+    }
+
     this->selectDeviceMode(Cols, Rows, RequiredSources, m_grabbingCols, m_grabbingRows);
 
     // Configure the sensor.
@@ -210,8 +218,8 @@ MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
 
     // Setup callbacks
     m_channelP->addIsolatedCallback(disparityCallback, Source_Disparity, this);
-    m_channelP->addIsolatedCallback(lumaLeftCallback, Source_Luma_Left, this);
-    m_channelP->addIsolatedCallback(chromaLeftCallback, Source_Chroma_Left, this);
+    m_channelP->addIsolatedCallback(lumaChromaLeftCallback, Source_Luma_Left | Source_Chroma_Left, this);
+
 }
 
 
@@ -219,8 +227,7 @@ MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
 MultiSenseWrapper::~MultiSenseWrapper()
 {
     m_channelP->removeIsolatedCallback(disparityCallback);
-    m_channelP->removeIsolatedCallback(lumaLeftCallback);
-    m_channelP->removeIsolatedCallback(chromaLeftCallback);
+    m_channelP->removeIsolatedCallback(lumaChromaLeftCallback);
 
     Channel::Destroy(m_channelP);
 }
@@ -421,7 +428,7 @@ Mat MultiSenseWrapper::CopyLeftLuma()
 
 Mat MultiSenseWrapper::CopyLeftRectifiedRGB()
 {
-    // Default construtor initializes to zero size.
+    // Default constructor initializes to zero size.
     Mat rgbImage;
     Mat rectifiedRgbImage;
 
@@ -432,22 +439,36 @@ Mat MultiSenseWrapper::CopyLeftRectifiedRGB()
         // exit from this set of curly braces.
         ScopedLock lock(&(this->m_lumaAndChromaLeftMutex));
 
-        // Is there data to copy?
-        if ((0 != m_matchedLumaLeftBufferP) && (0 != m_matchedChromaLeftBufferP)) {
+        if (m_chromaSupported) {
+            // Is there data to copy?
+            if ((0 != m_matchedLumaLeftBufferP) && (0 != m_matchedChromaLeftBufferP)) {
 
-            // ...Yes.  Construct cv::Mat instances that reference the
-            // luma and chroma data.  These lines do not actually copy the
-            // data.
-            image::Header const& lumaHeader   = this->m_matchedLumaLeftHeader;
-            image::Header const& chromaHeader = this->m_matchedChromaLeftHeader;
-            Mat lumaMat(lumaHeader.height, lumaHeader.width, CV_8UC1,
-                          const_cast<void*>(lumaHeader.imageDataP));
-            Mat chromaMat(chromaHeader.height, chromaHeader.width, CV_8UC1,
-                          const_cast<void*>(chromaHeader.imageDataP));
+                // ...Yes.  Construct cv::Mat instances that reference the
+                // luma and chroma data.  These lines do not actually copy the data.
+                image::Header const& lumaHeader   = this->m_matchedLumaLeftHeader;
+                image::Header const& chromaHeader = this->m_matchedChromaLeftHeader;
+                Mat lumaMat(lumaHeader.height, lumaHeader.width, CV_8UC1,
+                              const_cast<void*>(lumaHeader.imageDataP));
+                Mat chromaMat(chromaHeader.height, chromaHeader.width, CV_8UC1,
+                              const_cast<void*>(chromaHeader.imageDataP));
 
-            // Create an unrectified color image.
-            rgbImage = this->makeRGBImage(lumaMat, chromaMat);
+                // Create an unrectified color image.
+                rgbImage = this->makeRGBImage(lumaMat, chromaMat);
 
+            }
+        } else {
+            // Is there data to copy?
+            if (0 != m_matchedLumaLeftBufferP) {
+                // ...Yes.  Construct cv::Mat instances that reference the
+                // luma data.  These lines do not actually copy the data.
+
+                image::Header const& lumaHeader   = this->m_matchedLumaLeftHeader;
+                Mat lumaMat(lumaHeader.height, lumaHeader.width, CV_8UC1,
+                              const_cast<void*>(lumaHeader.imageDataP));
+
+                // Create an unrectified "color" image (RGB channels will be greyscale)
+                rgbImage = this->makeMonoImage(lumaMat);
+            }
         }
     }  // Releases the lock on m_lumaAndChromaLeftMutex.
 
@@ -612,6 +633,32 @@ void MultiSenseWrapper::SetPostFilt(float PostFilt)
 // These functions talk to live MultiSense hardware
 // ---------------------------------------------------------------------------
 
+Mat MultiSenseWrapper::makeMonoImage(const Mat& LumaImage)
+{
+    const uint32_t height    = LumaImage.rows;
+    const uint32_t width     = LumaImage.cols;
+
+    const uint8_t *lumaP     = reinterpret_cast<const uint8_t*>(LumaImage.ptr(0));
+
+    Mat            GreyImage  (height, width, CV_8UC3);
+    uint8_t       *rgbP      = reinterpret_cast<uint8_t*>(GreyImage.ptr(0));
+    const uint32_t rgbStride = width * 3;
+
+    // Copied from the MultiSense ROS driver
+    for(uint32_t y=0; y<height; y++) {
+        for(uint32_t x=0; x<width; x++) {
+
+            const uint32_t lumaOffset   = (y * width) + x;
+            const uint32_t rgbOffset    = (y * rgbStride) + (3 * x);
+
+            rgbP[rgbOffset + 2] = lumaP[lumaOffset];
+            rgbP[rgbOffset + 1] = lumaP[lumaOffset];
+            rgbP[rgbOffset + 0] = lumaP[lumaOffset];
+        }
+    }
+
+    return GreyImage;
+}
 
 // Make RGB image from YCbCr image
 Mat MultiSenseWrapper::makeRGBImage(const Mat& LumaImage,
@@ -850,59 +897,65 @@ void MultiSenseWrapper::updateLumaAndChroma(const image::Header& header)
                       "MultiSenseWrapper::updateLumaAndChroma()\n");
     }
 
+    if (m_chromaSupported) {
 
-    // Now that we've buffered a reference to the incoming data
-    // reference, check to see if the incoming data makes a complete
-    // set of luma/chroma data for a new image.  If so, we'll copy it
-    // to secondary storage.
-    if (this->m_lumaLeftHeader.frameId == this->m_chromaLeftHeader.frameId) {
+        // Now that we've buffered a reference to the incoming data
+        // reference, check to see if the incoming data makes a complete
+        // set of luma/chroma data for a new image.  If so, we'll copy it
+        // to secondary storage.
+        if (this->m_lumaLeftHeader.frameId == this->m_chromaLeftHeader.frameId) {
 
-        // We have a matching luma/chroma pair.  Sanity check to make
-        // sure we're not getting repeat frame IDs, or double-copying
-        // somewhere.
-        if((this->m_lumaLeftHeader.frameId
-            == this->m_matchedLumaLeftHeader.frameId)
-           || (this->m_chromaLeftHeader.frameId
-            == this->m_matchedChromaLeftHeader.frameId)) {
+            // We have a matching luma/chroma pair.  Sanity check to make
+            // sure we're not getting repeat frame IDs, or double-copying
+            // somewhere.
+            if((this->m_lumaLeftHeader.frameId
+                == this->m_matchedLumaLeftHeader.frameId)
+               || (this->m_chromaLeftHeader.frameId
+                == this->m_matchedChromaLeftHeader.frameId)) {
 
 
-            // Sanity check: this should never happen.
-            CRL_EXCEPTION(
-                "Logic exception in MultiSenseWrapper::updateLumaAndChroma():\n"
-                "frame IDs appear to be double-counted.\n");
+                // Sanity check: this should never happen.
+                CRL_EXCEPTION(
+                    "Logic exception in MultiSenseWrapper::updateLumaAndChroma():\n"
+                    "frame IDs appear to be double-counted.\n");
+            }
+
+            // Release any previously saved (and now obselete) luma/chroma data.
+            if (0 != this->m_matchedLumaLeftBufferP) {
+                this->m_channelP->releaseCallbackBuffer(
+                    this->m_matchedLumaLeftBufferP);
+            }
+            if (0 != this->m_matchedChromaLeftBufferP) {
+                this->m_channelP->releaseCallbackBuffer(
+                    this->m_matchedChromaLeftBufferP);
+            }
+
+            // Transfer the new luma and chroma component into secondary
+            // storage, where they will be available to the calling
+            // context.  save the matched pair.
+            this->m_matchedLumaLeftBufferP = this->m_lumaLeftBufferP;
+            this->m_matchedLumaLeftHeader = this->m_lumaLeftHeader;
+            this->m_lumaLeftBufferP = 0;
+
+            this->m_matchedChromaLeftBufferP = this->m_chromaLeftBufferP;
+            this->m_matchedChromaLeftHeader = this->m_chromaLeftHeader;
+            this->m_chromaLeftBufferP = 0;
+
         }
+    } else {
 
-        // Release any previously saved (and now obselete) luma/chroma data.
+        // Release any previously saved (and now obsolete) luma data.
         if (0 != this->m_matchedLumaLeftBufferP) {
             this->m_channelP->releaseCallbackBuffer(
                 this->m_matchedLumaLeftBufferP);
         }
-        if (0 != this->m_matchedChromaLeftBufferP) {
-            this->m_channelP->releaseCallbackBuffer(
-                this->m_matchedChromaLeftBufferP);
-        }
 
-        // Transfer the new luma and chroma component into secondary
-        // storage, where they will be available to the calling
-        // context.  save the matched pair.
+        // Unit is monochrome, so all we need to use is transfer the new luma component
+        // into secondary storage, where it will be available to the calling context.
         this->m_matchedLumaLeftBufferP = this->m_lumaLeftBufferP;
         this->m_matchedLumaLeftHeader = this->m_lumaLeftHeader;
         this->m_lumaLeftBufferP = 0;
-
-        this->m_matchedChromaLeftBufferP = this->m_chromaLeftBufferP;
-        this->m_matchedChromaLeftHeader = this->m_chromaLeftHeader;
-        this->m_chromaLeftBufferP = 0;
-
     }
-}
-
-
-// Calls non-static method updateLumaAndChroma()
-void MultiSenseWrapper::chromaLeftCallback(const image::Header& header,
-                                           void *userDataP)
-{
-    MultiSenseWrapper* pod = (MultiSenseWrapper *)userDataP;
-    pod->updateLumaAndChroma(header);
 }
 
 
@@ -918,7 +971,7 @@ void MultiSenseWrapper::disparityCallback(const image::Header& header,
 
 
 // Calls non-static method updateLumaAndChroma()
-void MultiSenseWrapper::lumaLeftCallback(const image::Header& header,
+void MultiSenseWrapper::lumaChromaLeftCallback(const image::Header& header,
                                          void *userDataP)
 {
     MultiSenseWrapper* pod = (MultiSenseWrapper *)userDataP;

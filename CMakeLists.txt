@@ -1,9 +1,9 @@
-# @file CMakeLists.txt 
-# 
+# @file CMakeLists.txt
+#
 # Top level build instructions.
 #
 # Significant history (date, user, job code, action):
-#   2015-05-21, dlr@carnegierobotics.com, PR1044, Created file, based on 
+#   2015-05-21, dlr@carnegierobotics.com, PR1044, Created file, based on
 #               original CMakeLists.txt from Dan Tascione.
 
 #
@@ -38,9 +38,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -ffunction-sections -fomit-frame-pointer -march
 # Include (-I) subdirectories and find packages.
 
 find_package(OpenCV)
-include_directories(BEFORE subRepositories/LibMultiSense/source ${BASE_DIRECTORY}/include)
+include_directories(BEFORE external/LibMultiSense/source ${BASE_DIRECTORY}/include)
 
 # Dispatch to subordinate CMakeList.txt files.
 
-add_subdirectory(subRepositories/LibMultiSense/source/LibMultiSense)
+add_subdirectory(external/LibMultiSense/source/LibMultiSense)
 add_subdirectory(src)

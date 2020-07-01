@@ -34,7 +34,7 @@ to configure the network for good performance.  The default MultiSense IP
 address is 10.66.171.21. In order to restart the network-manager after you are
 through running the demos, run:
 
-sudo service network-manager restart
+    > sudo service network-manager restart
 
 
 ### Controls
@@ -79,7 +79,7 @@ m,M = Step through variety of color display modes
 You can try adjusting the gain and the noise parameters to try to fill in some of your missing/black point cloud areas.
 
 
-###Support
+### Support
 
 To report an issue with this library or request a new feature,
 please use the [GitHub issues system](https://github.com/carnegierobotics/multisense_cloud_demos/issues)

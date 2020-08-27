@@ -475,9 +475,9 @@ Mat MultiSenseWrapper::CopyLeftRectifiedRGB()
     // If we successfully generated a color image, rectify it now.
     if (!rgbImage.empty()) {
 
-        CvScalar OutlierColor = CV_RGB(0.0, 0.0, 0.0);
+        Scalar OutlierColor = CV_RGB(0.0, 0.0, 0.0);
         remap(rgbImage, rectifiedRgbImage, this->m_leftCalibrationMapX, this->m_leftCalibrationMapY,
-              CV_INTER_LINEAR, BORDER_CONSTANT, OutlierColor);
+              INTER_LINEAR, BORDER_CONSTANT, OutlierColor);
     }
 
     // The returned Mat will have zero size if we weren't able to get

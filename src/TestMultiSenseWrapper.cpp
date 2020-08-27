@@ -37,11 +37,11 @@ int main(int argc, char *argv[])
 
     // cvInitSystem(0, NULL);
     //cvNamedWindow("Rectified", CV_WINDOW_AUTOSIZE);
-    namedWindow("Disparity", CV_WINDOW_AUTOSIZE);
-    namedWindow("Left", CV_WINDOW_AUTOSIZE);
-    // namedWindow("Right", CV_WINDOW_AUTOSIZE);
-    namedWindow("Color", CV_WINDOW_AUTOSIZE);
-    namedWindow("Cloud", CV_WINDOW_AUTOSIZE);
+    namedWindow("Disparity", WINDOW_AUTOSIZE);
+    namedWindow("Left", WINDOW_AUTOSIZE);
+    // namedWindow("Right", WINDOW_AUTOSIZE);
+    namedWindow("Color", WINDOW_AUTOSIZE);
+    namedWindow("Cloud", WINDOW_AUTOSIZE);
 
 
     // Ask camera to start sending images

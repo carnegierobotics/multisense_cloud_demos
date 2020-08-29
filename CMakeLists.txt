@@ -11,6 +11,12 @@
 #
 
 cmake_minimum_required(VERSION 2.8)
+project(multisense_cloud_demos)
+
+#
+# Turn on optimizations and maximum warnings.
+#
+add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wno-variadic-macros)
 
 # This will be useful for build rules in subordinate CMakeLists files.
 
@@ -21,19 +27,10 @@ set(BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BASE_DIRECTORY}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${BASE_DIRECTORY}/lib)
 
-#
-# Turn on optimizations and maximum warnings.
-#
-
-# Turn on debugging symbols / optimizations and warnings.  To choose
-# which build type, use "cmake -DCMAKE_BUILD_TYPE=Debug <directory>" or
-# "cmake -DCMAKE_BUILD_TYPE=Release <directory>".
-
-set(CMAKE_C_FLAGS_DEBUG "-O0 -g -march=native -msse4.2 -Wall -fstrict-aliasing -pthread -fopenmp")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -march=native -msse4.2 -Wall -fstrict-aliasing -pthread -fopenmp")
-
-set(CMAKE_C_FLAGS_RELEASE "-O2 -ffunction-sections -fomit-frame-pointer -march=native -msse4.2 -mfpmath=both -Wall -fstrict-aliasing -pthread -fopenmp")
-set(CMAKE_CXX_FLAGS_RELEASE "-O2 -ffunction-sections -fomit-frame-pointer -march=native -msse4.2 -mfpmath=both -Wall -fstrict-aliasing -pthread -fopenmp")
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Selecting default build type: Release")
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type (default: Release)" FORCE)
+endif ()
 
 # Include (-I) subdirectories and find packages.
 

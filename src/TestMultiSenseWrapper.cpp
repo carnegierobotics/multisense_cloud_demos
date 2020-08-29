@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <iostream>
 #include <pthread.h>
+#include <unistd.h>
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -18,13 +20,35 @@
 
 using namespace cv;
 
-// Test grabbing from CRL Sensor Pod
-int main(int argc, char *argv[])
+void usage(char** argv)
 {
+    std::cerr << "Usage: " << argv[0] << " [-i <ip-address>]" << std::endl;
+    std::cerr << "\t-i default: 10.66.171.21" << std::endl;
+}
+
+// Test grabbing from CRL Sensor Pod
+int main(int argc, char **argv)
+{
+    std::string ipAddress = "10.66.171.21";
+
+    int result = -1;
+    while ((result = getopt(argc, argv, "i:h")) != -1)
+    {
+        switch (result)
+        {
+            case 'i':
+                ipAddress = optarg;
+                break;
+            default:
+                usage(argv);
+                throw std::runtime_error("Invalid argument: -" + std::to_string(result));
+        }
+    }
+
     Mat CvImg;
 
     // Setup Comms with CRL stereo pod
-    MultiSenseWrapper MultiSense;
+    MultiSenseWrapper MultiSense(ipAddress);
 
     int c;
     float CurGain = 1.4;

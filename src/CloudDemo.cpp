@@ -79,7 +79,7 @@ CloudDemo::CloudDemo(BaseMultiSenseWrapper *MultiSenseArg)
     // Setup CloudDemo to use the resolution chosen by the sensor itself
     ImgRows = this->MultiSense->m_grabbingRows;
     ImgCols = this->MultiSense->m_grabbingCols;
-};
+}
 
 
 // Destructor.
@@ -913,6 +913,9 @@ void CloudDemo::GlutReshape(GLsizei width, GLsizei height)
 // Handles keyboard callback routine
 void CloudDemo::GlutKey(unsigned char key, int x, int y)
 {
+    (void) x;
+    (void) y;
+
     // Strafe in view frame
     if (key == 'a') {
         EyeX += ViewZ * 0.10;
@@ -1210,9 +1213,13 @@ void CloudDemo::GlutMouseDownMotion(int32_t X, int32_t Y)
 
 
 // Handles mouse-wheel motion events
-void CloudDemo::GlutMouseWheel(int32_t Button, int32_t Dir, int32_t X, int32_t Y)
+void CloudDemo::GlutMouseWheel(int32_t Button, int32_t dir, int32_t x, int32_t y)
 {
-    if (Dir > 0) {
+    (void) Button;
+    (void) x;
+    (void) y;
+
+    if (dir > 0) {
         printf("Zoom in!\n");
     }
     else {

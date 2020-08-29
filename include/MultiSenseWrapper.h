@@ -169,8 +169,7 @@ public:
     // You should not have to get these dimensions perfect -- the software should choose the closest size.
     // Default factory IP address for multisense units is: "10.66.171.21"
     // Typical dimensions are 1024x512 or 2048x1024 (others are possible).
-    MultiSenseWrapper(const std::string& IP = "10.66.171.21",
-                      int Cols = 1024, int Rows = 512, float FPS = 15.0);
+    MultiSenseWrapper(const std::string& IP = "10.66.171.21");
 
     // Destructor.
     ~MultiSenseWrapper();

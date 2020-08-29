@@ -35,44 +35,26 @@ using namespace std;
 using namespace crl::multisense;
 using namespace cv;
 
-
-
-// Get milliseconds since first call to this routine.
-static uint64_t ElapsedMS()
-{
-    struct timeval TV;
-    struct timezone TZ;
-    static uint64_t ElapsedMSInitialTime = 0;
-
-    TZ.tz_dsttime = 0;
-    TZ.tz_minuteswest = 0;
-    gettimeofday(&TV, &TZ);
-
-    uint64_t CurrentTime = static_cast<uint64_t>(TV.tv_sec) * 1000;
-    CurrentTime += (TV.tv_usec / 1000);
-
-    if (ElapsedMSInitialTime == 0)
-      ElapsedMSInitialTime = CurrentTime;
-
-    return(CurrentTime - ElapsedMSInitialTime);
-}
-
-
 // Anonymous namespace for locally scoped symbols.
 namespace {
 
-    // Simple pthread-based lock class with RAII semantics.
-    class ScopedLock
-    {
-    public:
-        ScopedLock(pthread_mutex_t* mutexP)
-            : m_mutexP(mutexP) { if(m_mutexP) {pthread_mutex_lock(m_mutexP);} }
+// Simple pthread-based lock class with RAII semantics.
+class ScopedLock
+{
+public:
+    ScopedLock(pthread_mutex_t* mutexP)
+        : m_mutexP(mutexP) { if(m_mutexP) {pthread_mutex_lock(m_mutexP);} }
 
-        ~ScopedLock() { if(m_mutexP) {pthread_mutex_unlock(m_mutexP);} }
+    ~ScopedLock() { if(m_mutexP) {pthread_mutex_unlock(m_mutexP);} }
 
-    private:
-        pthread_mutex_t *m_mutexP;
-    };
+private:
+    pthread_mutex_t *m_mutexP;
+};
+
+inline std::string createErrorString(const std::string &info, const Status &status)
+{
+    return info + Channel::statusString(status);
+}
 
 
 } // namespace
@@ -117,7 +99,7 @@ BaseMultiSenseWrapper::~BaseMultiSenseWrapper()
 
 // Setup communications with CRL sensor pod.
 MultiSenseWrapper::
-MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
+MultiSenseWrapper(const std::string& IP)
     : m_channelP(0),
       m_chromaLeftHeader(),
       m_disparityHeader(),
@@ -137,10 +119,10 @@ MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
 
     // Set up control structures for coordinating threads.
     if (0 != pthread_mutex_init(&m_disparityMutex, NULL)) {
-        CRL_EXCEPTION("pthread_mutex_init() failed: %s", strerror(errno));
+        std::runtime_error(std::string("pthread_mutex_init() failed: ")+ strerror(errno));
     }
     if (0 != pthread_mutex_init(&m_lumaAndChromaLeftMutex, NULL)) {
-        CRL_EXCEPTION("pthread_mutex_init() failed: %s", strerror(errno));
+        std::runtime_error(std::string("pthread_mutex_init() failed: ") + strerror(errno));
     }
 
     // Initialize communications.
@@ -157,40 +139,33 @@ MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
     system::VersionInfo versionInfo;
     status = m_channelP->getVersionInfo(versionInfo);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("failed to query sensor version: %d\n", status);
+        std::runtime_error("failed to query sensor version:" + status);
     }
 
     system::DeviceInfo deviceInfo;
     status = m_channelP->getDeviceInfo(deviceInfo);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("failed to query device info: %d\n", status);
+        std::runtime_error("failed to query device info: " + status);
     }
     m_sensorRows = deviceInfo.imagerHeight;
     m_sensorCols = deviceInfo.imagerWidth;
 
-    // Choose an image resolution that is a similar as possible to the
-    // requested resolution.
-    DataSource RequiredSources = Source_Disparity | Source_Luma_Left | Source_Chroma_Left;
-
     if (deviceInfo.imagerType == system::DeviceInfo::IMAGER_TYPE_CMV2000_GREY ||
         deviceInfo.imagerType == system::DeviceInfo::IMAGER_TYPE_CMV4000_GREY) {
-        RequiredSources = Source_Disparity | Source_Luma_Left;
         m_chromaSupported = false;
     }
-
-    this->selectDeviceMode(Cols, Rows, RequiredSources, m_grabbingCols, m_grabbingRows);
 
     // Configure the sensor.
     image::Config cfg;
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error("Failed to query image config: " + status);
     }
 
     cfg.setResolution(m_grabbingCols, m_grabbingRows);
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor resolution and framerate\n");
+        std::runtime_error("Failed to configure sensor resolution and framerate\n");
     }
 
     // Change MTU
@@ -202,8 +177,6 @@ MultiSenseWrapper(const std::string& IP, int Cols, int Rows, float FPS)
     if (Status_Ok != status)
         fprintf(stderr, "Failed to set trigger source, Error %d\n", status);
 
-    // Set framerate.
-    this->SetFPS(FPS);
 
     // Read calibration data and compute rectification maps.
     InitializeTransforms();
@@ -240,8 +213,7 @@ void MultiSenseWrapper::StartChromaLeftStream()
 
     status = m_channelP->startStreams(Source_Chroma_Left);
     if (status != Status_Ok)
-        CRL_EXCEPTION("Unable to start Source_Chroma_Left stream: %s",
-                      strerror(errno));
+        std::runtime_error(createErrorString("Unable to start Source_Chroma_Left stream: ", status));
 }
 
 
@@ -252,8 +224,7 @@ void MultiSenseWrapper::StartDisparityStream()
 
     status = m_channelP->startStreams(Source_Disparity) != Status_Ok;
     if (status != Status_Ok)
-        CRL_EXCEPTION("Unable to start Source_Disparity stream: %s",
-                      strerror(errno));
+        std::runtime_error(createErrorString("Unable to start Source_Disparity stream: ", status));
 }
 
 
@@ -264,8 +235,7 @@ void MultiSenseWrapper::StartLumaLeftStream()
 
     status = m_channelP->startStreams(Source_Luma_Left);
     if (status != Status_Ok)
-        CRL_EXCEPTION("Unable to start Source_Luma_Left stream: %s",
-                      strerror(errno));
+        std::runtime_error(createErrorString("Unable to start Source_Luma_Left stream: ", status));
 }
 
 
@@ -276,8 +246,7 @@ void MultiSenseWrapper::StopChromaLeftStream()
 
     status = m_channelP->stopStreams(Source_Chroma_Left);
     if (status != Status_Ok)
-        CRL_EXCEPTION("Unable to stop Source_Chroma_Left stream: %s",
-                      strerror(errno));
+        std::runtime_error(createErrorString("Unable to stop Source_Chroma_Left stream: ", status));
 }
 
 
@@ -288,8 +257,7 @@ void MultiSenseWrapper::StopDisparityStream()
 
     status = m_channelP->stopStreams(Source_Disparity) != Status_Ok;
     if (status != Status_Ok)
-        CRL_EXCEPTION("Unable to stop Source_Disparity stream: %s",
-                      strerror(errno));
+        std::runtime_error(createErrorString("Unable to stop Source_Disparity stream: ", status));
 }
 
 
@@ -300,8 +268,7 @@ void MultiSenseWrapper::StopLumaLeftStream()
 
     status = m_channelP->stopStreams(Source_Luma_Left);
     if (status != Status_Ok)
-        CRL_EXCEPTION("Unable to stop Source_Luma_Left stream: %s",
-                      strerror(errno));
+        std::runtime_error(createErrorString("Unable to stop Source_Luma_Left stream: ", errno));
 }
 
 
@@ -321,7 +288,7 @@ void MultiSenseWrapper::GetCalibration(float LeftM[3][3], float LeftD[8],
 
     Status status = m_channelP->getImageCalibration(Cal);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     // Scale for image size vs. imager size
@@ -494,14 +461,13 @@ void MultiSenseWrapper::SetDisparities(uint32_t Disparities)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setDisparities(Disparities);  // Can be 128 or 256
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor number of disparities: %d\n",
-                      status);
+        std::runtime_error(createErrorString("Failed to configure sensor number of disparities: ", status));
     }
 }
 
@@ -514,14 +480,13 @@ void MultiSenseWrapper::SetExpThresh(float ExpThresh)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setAutoExposureThresh(ExpThresh);  // Can be 0.0 -> 1.0 ?
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor autoexposure threshold: %d\n",
-                      status);
+        std::runtime_error(createErrorString("Failed to configure sensor autoexposure threshold: ",  status));
     }
 }
 
@@ -535,13 +500,13 @@ void MultiSenseWrapper::SetExpDecay(uint32_t ExpDecay)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setAutoExposureDecay(ExpDecay);  // seconds
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor autoexposure decay: %d\n", status);
+        std::runtime_error(createErrorString("Failed to configure sensor autoexposure decay: ", status));
     }
 }
 
@@ -557,13 +522,13 @@ void MultiSenseWrapper::SetFPS(float FPS)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setFps(FPS);  // Can be 1.0 -> 30.0
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor framerate: %d\n", status);
+        std::runtime_error(createErrorString("Failed to configure sensor framerate: ", status));
     }
 }
 
@@ -576,13 +541,13 @@ void MultiSenseWrapper::SetGain(float Gain)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setGain(Gain);  // Can be 0.0 -> 6.0 ?
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor gain: %d\n", status);
+        std::runtime_error(createErrorString("Failed to configure sensor gain: ", status));
     }
 }
 
@@ -595,13 +560,13 @@ void MultiSenseWrapper::SetMaxExp(int MaxExpMilS)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setAutoExposureMax(MaxExpMilS);
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor autoexposure: %d\n", status);
+        std::runtime_error(createErrorString("Failed to configure sensor autoexposure: ", status));
     }
 }
 
@@ -614,14 +579,13 @@ void MultiSenseWrapper::SetPostFilt(float PostFilt)
 
     status = m_channelP->getImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query image config: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query image config: ", status));
     }
 
     cfg.setStereoPostFilterStrength(PostFilt);  // Can be 0.0 -> 1.0
     status = m_channelP->setImageConfig(cfg);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to configure sensor post filter level: %d\n",
-                      status);
+        std::runtime_error(createErrorString("Failed to configure sensor post filter level: ", status));
     }
 }
 
@@ -723,7 +687,7 @@ void MultiSenseWrapper::selectDeviceMode(int32_t RequestedWidth,
     std::vector<system::DeviceMode> modeVector;
     Status status = m_channelP->getDeviceModes(modeVector);
     if (Status_Ok != status) {
-        CRL_EXCEPTION("Failed to query device modes: %d\n", status);
+        std::runtime_error(createErrorString("Failed to query device modes: ", status));
     }
 
     // Check each mode in turn, and pick the one that's closest to the
@@ -747,8 +711,8 @@ void MultiSenseWrapper::selectDeviceMode(int32_t RequestedWidth,
     }
 
     if(bestResidual < 0) {
-        CRL_EXCEPTION("Device does not support the required data sources "
-                      "(left luma, left chroma, and disparity)\n");
+        std::runtime_error("Device does not support the required data sources "
+                      "(left luma, left chroma, and disparity)");
     }
 
     SelectedWidth = bestMode.width;
@@ -775,8 +739,8 @@ void MultiSenseWrapper::InitializeTransforms()
 
     status = m_channelP->getImageConfig(c);
     if (status != Status_Ok) {
-        CRL_EXCEPTION("Failed to getImageConfig() in "
-                      "MultiSenseWrapper::InitializeTransforms()\n");
+        std::runtime_error("Failed to getImageConfig() in "
+                      "MultiSenseWrapper::InitializeTransforms()");
     }
 
     uint32_t ImgRows = c.height();
@@ -893,8 +857,8 @@ void MultiSenseWrapper::updateLumaAndChroma(const image::Header& header)
         this->updateImage(header, this->m_chromaLeftHeader,
                           0, &this->m_chromaLeftBufferP);
     } else {
-        CRL_EXCEPTION("Unexpected source type in "
-                      "MultiSenseWrapper::updateLumaAndChroma()\n");
+        std::runtime_error("Unexpected source type in "
+                           "MultiSenseWrapper::updateLumaAndChroma()");
     }
 
     if (m_chromaSupported) {
@@ -915,7 +879,7 @@ void MultiSenseWrapper::updateLumaAndChroma(const image::Header& header)
 
 
                 // Sanity check: this should never happen.
-                CRL_EXCEPTION(
+                std::runtime_error(
                     "Logic exception in MultiSenseWrapper::updateLumaAndChroma():\n"
                     "frame IDs appear to be double-counted.\n");
             }

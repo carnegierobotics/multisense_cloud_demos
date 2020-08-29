@@ -17,10 +17,11 @@
  *               optimized code for improved performance.
  **/
 
-#include <stdio.h>
+#include <cstring>
 #include <fstream>
 #include <iostream>
-#include <cstring>
+#include <stdio.h>
+#include <unistd.h>
 
 #include <opencv2/opencv.hpp>
 
@@ -59,14 +60,35 @@ namespace {
 
 } // namespace
 
+void usage(char** argv)
+{
+    std::cerr << "Usage: " << argv[0] << " [-i <ip-address>]" << std::endl;
+    std::cerr << "\t-i default: 10.66.171.21" << std::endl;
+}
 
 // Start for this demo
 int main(int argc, char *argvPP[])
 {
+    std::string ipAddress = "10.66.171.21";
+
+    int result = -1;
+    while ((result = getopt(argc, argvPP, "i:h")) != -1)
+    {
+        switch (result)
+        {
+            case 'i':
+                ipAddress = optarg;
+                break;
+            case 'h':
+                usage(argvPP);
+                return 0;
+        }
+    }
+
     // Initialize the demo object and set the self pointer
     // to itself so that the static callbacks may call
     // the non-static methods which actually run the demo
-    BaseMultiSenseWrapper *multiSenseWrapperP = new MultiSenseWrapper();
+    BaseMultiSenseWrapper *multiSenseWrapperP = new MultiSenseWrapper(ipAddress);
 
     // This try block is to prevent a memory leak if one of the
     // enclosed function calls throws an exception.
